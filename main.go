@@ -66,11 +66,11 @@ func checkURL(row int, url string, treatRedirect bool) urlError {
 			}
 			defer finalResp.Body.Close()
 			if finalResp.StatusCode < 400 {
-				return urlError{Row: row, URL: url}
+				return urlError{Row: row, URL: url} // нет ошибки
 			}
 			return urlError{row, url, fmt.Sprintf("HTTP %d %s", finalResp.StatusCode, finalResp.Status)}
 		}
-		return urlError{Row: row, URL: url}
+		return urlError{Row: row, URL: url} // всё хорошо
 	}
 	return urlError{row, url, fmt.Sprintf("HTTP %d %s", resp.StatusCode, resp.Status)}
 }
