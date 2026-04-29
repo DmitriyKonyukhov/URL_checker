@@ -1,11 +1,9 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-import pandas as pd
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from pathlib import Path
-import os
 import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
@@ -94,8 +92,8 @@ class URLCheckerApp:
         self.column_var = tk.StringVar()
         self.redirect_var = tk.BooleanVar(value=False)
 
-        self.df = None
-        self.wb = None
+        self.wb = None   # рабочая книга openpyxl
+        self.ws = None   # активный лист
 
         # --- Виджеты ---
         tk.Label(root, text="1. Выберите Excel-файл", font=("Arial", 10, "bold")).pack(pady=(15,5))
@@ -118,14 +116,13 @@ class URLCheckerApp:
         tk.Checkbutton(options_frame, text="Считать редиректы (301, 302, ...) ошибкой",
                        variable=self.redirect_var).pack(anchor="w")
 
-        # Кнопки Проверить и Инструкция
         btn_frame = tk.Frame(root)
         btn_frame.pack(pady=10)
         self.check_btn = tk.Button(btn_frame, text="4. Проверить URL", command=self.start_check,
-                                   bg="#4CAF50", fg="black", height=2, width=20)
+                                   bg="#4CAF50", fg="white", height=2, width=20)
         self.check_btn.pack(side=tk.LEFT, padx=5)
         self.info_btn = tk.Button(btn_frame, text="Инструкция", command=self.show_instructions,
-                                  bg="#2196F3", fg="black", height=2, width=14)
+                                  bg="#2196F3", fg="white", height=2, width=14)
         self.info_btn.pack(side=tk.LEFT, padx=5)
 
         self.progress = ttk.Progressbar(root, orient="horizontal", length=450, mode="determinate")
@@ -140,8 +137,8 @@ class URLCheckerApp:
             return
         self.file_path.set(path)
         try:
-            xl = pd.ExcelFile(path)
-            sheets = xl.sheet_names
+            self.wb = openpyxl.load_workbook(path)
+            sheets = self.wb.sheetnames
             self.sheet_menu['values'] = sheets
             if sheets:
                 self.sheet_var.set(sheets[0])
@@ -156,11 +153,13 @@ class URLCheckerApp:
         if not self.file_path.get() or not self.sheet_var.get():
             return
         try:
-            self.df = pd.read_excel(self.file_path.get(), sheet_name=self.sheet_var.get(), nrows=1)
-            cols = list(self.df.columns)
-            self.column_menu['values'] = cols
-            if cols:
-                self.column_var.set(cols[0])
+            sheet_name = self.sheet_var.get()
+            self.ws = self.wb[sheet_name]
+            # Читаем первую строку как заголовки
+            headers = [cell.value for cell in self.ws[1]]
+            self.column_menu['values'] = headers
+            if headers:
+                self.column_var.set(headers[0])
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось прочитать столбцы:\n{e}")
 
@@ -168,29 +167,25 @@ class URLCheckerApp:
         if not self.file_path.get():
             messagebox.showwarning("Выберите файл", "Сначала выберите Excel-файл")
             return
-        sheet = self.sheet_var.get()
+        sheet_name = self.sheet_var.get()
         column = self.column_var.get()
-        if not sheet or not column:
+        if not sheet_name or not column:
             messagebox.showwarning("Заполните поля", "Выберите лист и столбец")
             return
 
+        # Определяем индекс колонки (по заголовку)
         try:
-            self.wb = openpyxl.load_workbook(self.file_path.get())
-            ws = self.wb[sheet]
-        except Exception as e:
-            messagebox.showerror("Ошибка чтения файла", f"Не удалось открыть файл через openpyxl:\n{e}")
+            headers = [cell.value for cell in self.ws[1]]
+            col_idx = headers.index(column) + 1  # openpyxl нумерация с 1
+            col_letter = get_column_letter(col_idx)
+        except ValueError:
+            messagebox.showerror("Ошибка", "Выбранный столбец не найден")
             return
 
-        try:
-            col_idx = self.df.columns.get_loc(column)
-            col_letter = get_column_letter(col_idx + 1)
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось определить столбец:\n{e}")
-            return
-
+        # Собираем URL и номера строк
         url_info = []
-        for row in range(2, ws.max_row + 1):
-            cell = ws[f"{col_letter}{row}"]
+        for row in range(2, self.ws.max_row + 1):
+            cell = self.ws[f"{col_letter}{row}"]
             if cell.hyperlink and cell.hyperlink.target:
                 url = cell.hyperlink.target
             else:
@@ -234,30 +229,29 @@ class URLCheckerApp:
             messagebox.showinfo("Отлично!", "Все URL работают корректно.")
             return
 
-        df_errors = pd.DataFrame(errors, columns=['Строка в Excel', 'URL', 'Тип ошибки'])
-
-        # Сохраняем в папку исходного файла
+        # Сохраняем отчёт в ту же папку, что и исходный файл
         source_dir = Path(self.file_path.get()).parent
         report_path = source_dir / "report_bad_urls.xlsx"
-        df_errors.to_excel(report_path, index=False)
 
-        # Стилизация
-        try:
-            wb_out = openpyxl.load_workbook(report_path)
-            ws_out = wb_out.active
-            red_fill = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
-            for row in ws_out.iter_rows(min_row=2, max_row=ws_out.max_row, min_col=1, max_col=3):
-                for cell in row:
-                    cell.fill = red_fill
-            wb_out.save(report_path)
-        except Exception:
-            pass
+        # Создаём новый workbook и заполняем
+        wb_out = openpyxl.Workbook()
+        ws_out = wb_out.active
+        ws_out.title = "Ошибки"
+        # Заголовки
+        ws_out.append(["Строка в Excel", "URL", "Тип ошибки"])
+        red_fill = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
+        for error in errors:
+            ws_out.append(list(error))
+        # Закрашиваем строки с ошибками
+        for row in ws_out.iter_rows(min_row=2, max_row=ws_out.max_row, min_col=1, max_col=3):
+            for cell in row:
+                cell.fill = red_fill
+        wb_out.save(report_path)
 
         messagebox.showinfo("Отчёт сохранён",
                             f"Найдено {len(errors)} проблемных URL.\nФайл: {report_path}")
 
     def show_instructions(self):
-        """Показывает окно с инструкцией."""
         instr_text = """ИНСТРУКЦИЯ ПО ИСПОЛЬЗОВАНИЮ
 
 1. Нажмите «Обзор» и выберите Excel-файл (расширение .xlsx – ОБЯЗАТЕЛЬНО, старые .xls не поддерживаются).
@@ -289,3 +283,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = URLCheckerApp(root)
     root.mainloop()
+    
