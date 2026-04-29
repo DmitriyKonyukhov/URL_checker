@@ -66,11 +66,11 @@ func checkURL(row int, url string, treatRedirect bool) urlError {
 			}
 			defer finalResp.Body.Close()
 			if finalResp.StatusCode < 400 {
-				return urlError{Row: row, URL: url} // нет ошибки
+				return urlError{Row: row, URL: url}
 			}
 			return urlError{row, url, fmt.Sprintf("HTTP %d %s", finalResp.StatusCode, finalResp.Status)}
 		}
-		return urlError{Row: row, URL: url} // всё хорошо
+		return urlError{Row: row, URL: url}
 	}
 	return urlError{row, url, fmt.Sprintf("HTTP %d %s", resp.StatusCode, resp.Status)}
 }
@@ -152,8 +152,9 @@ func extractURLs(path, sheet, colLetter string) ([]urlInfo, error) {
 		}
 		cellValue := row[colIdx]
 		cellRef := fmt.Sprintf("%s%d", colLetter, i+1)
-		// В excelize v2 GetCellHyperLink возвращает (link, text, ok)
-		if link, _, ok := f.GetCellHyperLink(sheet, cellRef); ok && link != "" {
+		// GetCellHyperLink возвращает (link string, text string, ok bool)
+		link, _, ok := f.GetCellHyperLink(sheet, cellRef)
+		if ok && link != "" {
 			urls = append(urls, urlInfo{Row: i + 1, URL: link})
 		} else if cellValue != "" {
 			urls = append(urls, urlInfo{Row: i + 1, URL: cellValue})
@@ -203,7 +204,6 @@ func main() {
 		selectedCol   string
 	)
 
-	// Виджеты объявляем заранее, чтобы их можно было использовать в обработчиках
 	fileEntry := widget.NewEntry()
 	fileEntry.Disable()
 
@@ -291,7 +291,6 @@ func main() {
 		dialog.ShowInformation("Инструкция", text, myWindow)
 	})
 
-	// Кнопка выбора файла
 	fileBtn := widget.NewButton("Обзор", func() {
 		fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 			if err != nil || reader == nil {
@@ -322,7 +321,6 @@ func main() {
 		fd.Show()
 	})
 
-	// Сборка интерфейса
 	content := container.NewVBox(
 		widget.NewLabel("1. Выберите Excel-файл"),
 		container.NewBorder(nil, nil, nil, fileBtn, fileEntry),
