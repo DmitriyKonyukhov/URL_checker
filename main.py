@@ -119,10 +119,10 @@ class URLCheckerApp:
         btn_frame = tk.Frame(root)
         btn_frame.pack(pady=10)
         self.check_btn = tk.Button(btn_frame, text="4. Проверить URL", command=self.start_check,
-                                   bg="#4CAF50", fg="white", height=2, width=20)
+                                   bg="#4CAF50", fg="black", height=2, width=20)
         self.check_btn.pack(side=tk.LEFT, padx=5)
         self.info_btn = tk.Button(btn_frame, text="Инструкция", command=self.show_instructions,
-                                  bg="#2196F3", fg="white", height=2, width=14)
+                                  bg="#2196F3", fg="black", height=2, width=14)
         self.info_btn.pack(side=tk.LEFT, padx=5)
 
         self.progress = ttk.Progressbar(root, orient="horizontal", length=450, mode="determinate")
