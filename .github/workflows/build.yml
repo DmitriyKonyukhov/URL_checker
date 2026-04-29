@@ -1,32 +1,34 @@
-name: Build Windows EXE
+name: Build Windows EXE (Light)
 
 on:
   push:
-    branches: [ main ]          # запускать при пуше в ветку main
-  workflow_dispatch:            # разрешает ручной запуск из интерфейса GitHub
+    branches: [ main ]
+  workflow_dispatch:   # возможность запуска вручную
 
 jobs:
   build:
-    runs-on: windows-latest     # виртуальная машина с Windows
+    runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4   # скачивает код репозитория
+      - name: Checkout repository   # скачиваем код
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'     # версия Python
+          python-version: '3.12'
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
+
+      - name: Install UPX (compressor)
+        run: choco install upx -y
 
       - name: Build with PyInstaller
-        run: |
-          pyinstaller --onefile --windowed --name URLChecker main.py
+        run: pyinstaller --onefile --windowed --name URLChecker main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: URLChecker-Windows
+          name: URLChecker-Windows-Light
           path: dist/URLChecker.exe
