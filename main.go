@@ -139,7 +139,13 @@ func extractURLs(path, sheet, colLetter string) ([]urlInfo, error) {
 		return nil, fmt.Errorf("нет данных")
 	}
 
-	colIdx := int(colLetter[0] - 'A')
+	// Безопасная конвертация буквы столбца (A, B, AA) в индекс
+	colIdx, err := excelize.ColumnNameToIndex(colLetter)
+	if err != nil {
+		return nil, fmt.Errorf("неверный столбец %s: %v", colLetter, err)
+	}
+	colIdx -= 1 // ColumnNameToIndex начинает отсчет с 1, а слайс rows с 0
+
 	if colIdx < 0 || colIdx >= len(rows[0]) {
 		return nil, fmt.Errorf("столбец %s не найден", colLetter)
 	}
@@ -152,9 +158,10 @@ func extractURLs(path, sheet, colLetter string) ([]urlInfo, error) {
 		}
 		cellValue := row[colIdx]
 		cellRef := fmt.Sprintf("%s%d", colLetter, i+1)
-		// GetCellHyperLink возвращает (link string, text string, ok bool)
-		link, _, ok := f.GetCellHyperLink(sheet, cellRef)
-		if ok && link != "" {
+		
+		// Актуальная сигнатура GetCellHyperLink (bool, string, error)
+		hasLink, link, err := f.GetCellHyperLink(sheet, cellRef)
+		if err == nil && hasLink && link != "" {
 			urls = append(urls, urlInfo{Row: i + 1, URL: link})
 		} else if cellValue != "" {
 			urls = append(urls, urlInfo{Row: i + 1, URL: cellValue})
@@ -227,10 +234,15 @@ func main() {
 		statusLabel.SetText("Проверка...")
 
 		colLetter := selectedCol
+		// Если выбрано слово (заголовок из 1-й строки), находим его индекс и превращаем в правильную букву столбца
 		if len(colLetter) > 1 || colLetter < "A" || colLetter > "Z" {
 			for i, h := range columnHeaders {
 				if h == selectedCol {
-					colLetter = string(rune('A' + i))
+					// ColumnNumberToName автоматически рассчитает A, B ... AA, AB
+					name, err := excelize.ColumnNumberToName(i + 1)
+					if err == nil {
+						colLetter = name
+					}
 					break
 				}
 			}
