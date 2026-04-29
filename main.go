@@ -152,8 +152,8 @@ func extractURLs(path, sheet, colLetter string) ([]urlInfo, error) {
 		}
 		cellValue := row[colIdx]
 		cellRef := fmt.Sprintf("%s%d", colLetter, i+1)
-		link, err := f.GetCellHyperLink(sheet, cellRef)
-		if err == nil && link != "" {
+		// В excelize v2 GetCellHyperLink возвращает (link, text, ok)
+		if link, _, ok := f.GetCellHyperLink(sheet, cellRef); ok && link != "" {
 			urls = append(urls, urlInfo{Row: i + 1, URL: link})
 		} else if cellValue != "" {
 			urls = append(urls, urlInfo{Row: i + 1, URL: cellValue})
@@ -198,57 +198,22 @@ func main() {
 
 	var (
 		filePath      string
-		sheetNames    []string
 		columnHeaders []string
 		selectedSheet string
 		selectedCol   string
 	)
 
-	// Элементы GUI
+	// Виджеты объявляем заранее, чтобы их можно было использовать в обработчиках
 	fileEntry := widget.NewEntry()
 	fileEntry.Disable()
-
-	fileBtn := widget.NewButton("Обзор", func() {
-		fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-			if err != nil || reader == nil {
-				return
-			}
-			filePath = reader.URI().Path()
-			fileEntry.SetText(filePath)
-			reader.Close()
-
-			s, c, err := loadSheetsAndColumns(filePath)
-			if err != nil {
-				dialog.ShowError(err, myWindow)
-				return
-			}
-			sheetNames = s
-			columnHeaders = c
-			sheetSelector.Options = s
-			if len(s) > 0 {
-				sheetSelector.SetSelected(s[0])
-				selectedSheet = s[0]
-			}
-			colSelector.Options = c
-			if len(c) > 0 {
-				colSelector.SetSelected(c[0])
-				selectedCol = c[0]
-			}
-		}, myWindow)
-		fd.SetFilter(storage.NewExtensionFileFilter([]string{".xlsx"}))
-		fd.Show()
-	})
 
 	sheetSelector := widget.NewSelect([]string{}, func(s string) {
 		selectedSheet = s
 	})
-
 	colSelector := widget.NewSelect([]string{}, func(s string) {
 		selectedCol = s
 	})
-
 	treatRedirectCheck := widget.NewCheck("Считать редиректы ошибкой", nil)
-
 	progressBar := widget.NewProgressBar()
 	statusLabel := widget.NewLabel("")
 
@@ -326,7 +291,38 @@ func main() {
 		dialog.ShowInformation("Инструкция", text, myWindow)
 	})
 
-	// Компоновка интерфейса
+	// Кнопка выбора файла
+	fileBtn := widget.NewButton("Обзор", func() {
+		fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+			if err != nil || reader == nil {
+				return
+			}
+			filePath = reader.URI().Path()
+			fileEntry.SetText(filePath)
+			reader.Close()
+
+			sheets, headers, err := loadSheetsAndColumns(filePath)
+			if err != nil {
+				dialog.ShowError(err, myWindow)
+				return
+			}
+			sheetSelector.Options = sheets
+			if len(sheets) > 0 {
+				sheetSelector.SetSelected(sheets[0])
+				selectedSheet = sheets[0]
+			}
+			colSelector.Options = headers
+			if len(headers) > 0 {
+				colSelector.SetSelected(headers[0])
+				selectedCol = headers[0]
+			}
+			columnHeaders = headers
+		}, myWindow)
+		fd.SetFilter(storage.NewExtensionFileFilter([]string{".xlsx"}))
+		fd.Show()
+	})
+
+	// Сборка интерфейса
 	content := container.NewVBox(
 		widget.NewLabel("1. Выберите Excel-файл"),
 		container.NewBorder(nil, nil, nil, fileBtn, fileEntry),
