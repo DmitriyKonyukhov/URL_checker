@@ -1,0 +1,32 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [ main ]          # запускать при пуше в ветку main
+  workflow_dispatch:            # разрешает ручной запуск из интерфейса GitHub
+
+jobs:
+  build:
+    runs-on: windows-latest     # виртуальная машина с Windows
+
+    steps:
+      - uses: actions/checkout@v4   # скачивает код репозитория
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'     # версия Python
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name URLChecker main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: URLChecker-Windows
+          path: dist/URLChecker.exe
