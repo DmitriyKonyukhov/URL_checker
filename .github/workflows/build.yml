@@ -3,7 +3,7 @@ name: Build Windows EXE (Go + Fyne + UPX)
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # ручной запуск
+  workflow_dispatch:          # позволяет запускать вручную
 
 jobs:
   build:
@@ -18,14 +18,17 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Install MinGW (GCC for Fyne)
+      - name: Install MinGW (C compiler for Fyne)
         run: choco install mingw -y
 
       - name: Install UPX
         run: choco install upx -y
 
-      - name: Get dependencies
-        run: go mod tidy
+      - name: Initialize Go module
+        run: go mod init url-checker          # ← создаёт go.mod
+
+      - name: Download dependencies
+        run: go mod tidy                      # ← подтягивает fyne и excelize
 
       - name: Build binary
         run: go build -ldflags="-s -w" -o URLChecker.exe .
