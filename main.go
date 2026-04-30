@@ -139,12 +139,12 @@ func extractURLs(path, sheet, colLetter string) ([]urlInfo, error) {
 		return nil, fmt.Errorf("нет данных")
 	}
 
-	// Безопасная конвертация буквы столбца (A, B, AA) в индекс
-	colIdx, err := excelize.ColumnNameToIndex(colLetter)
+	// ИСПРАВЛЕНО: Правильная функция ColumnNameToNumber
+	colNum, err := excelize.ColumnNameToNumber(colLetter)
 	if err != nil {
 		return nil, fmt.Errorf("неверный столбец %s: %v", colLetter, err)
 	}
-	colIdx -= 1 // ColumnNameToIndex начинает отсчет с 1, а слайс rows с 0
+	colIdx := colNum - 1 // ColumnNameToNumber начинает отсчет с 1, а слайс rows с 0
 
 	if colIdx < 0 || colIdx >= len(rows[0]) {
 		return nil, fmt.Errorf("столбец %s не найден", colLetter)
@@ -158,8 +158,7 @@ func extractURLs(path, sheet, colLetter string) ([]urlInfo, error) {
 		}
 		cellValue := row[colIdx]
 		cellRef := fmt.Sprintf("%s%d", colLetter, i+1)
-		
-		// Актуальная сигнатура GetCellHyperLink (bool, string, error)
+
 		hasLink, link, err := f.GetCellHyperLink(sheet, cellRef)
 		if err == nil && hasLink && link != "" {
 			urls = append(urls, urlInfo{Row: i + 1, URL: link})
@@ -224,7 +223,10 @@ func main() {
 	progressBar := widget.NewProgressBar()
 	statusLabel := widget.NewLabel("")
 
-	checkBtn := widget.NewButton("Проверить URL", func() {
+	// ИСПРАВЛЕНО: Сначала объявляем переменную, чтобы ее можно было использовать внутри функции
+	var checkBtn *widget.Button 
+	
+	checkBtn = widget.NewButton("Проверить URL", func() {
 		if filePath == "" {
 			dialog.ShowInformation("Ошибка", "Сначала выберите Excel-файл", myWindow)
 			return
@@ -234,11 +236,9 @@ func main() {
 		statusLabel.SetText("Проверка...")
 
 		colLetter := selectedCol
-		// Если выбрано слово (заголовок из 1-й строки), находим его индекс и превращаем в правильную букву столбца
 		if len(colLetter) > 1 || colLetter < "A" || colLetter > "Z" {
 			for i, h := range columnHeaders {
 				if h == selectedCol {
-					// ColumnNumberToName автоматически рассчитает A, B ... AA, AB
 					name, err := excelize.ColumnNumberToName(i + 1)
 					if err == nil {
 						colLetter = name
